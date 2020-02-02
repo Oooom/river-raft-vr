@@ -1,0 +1,188 @@
+<html>
+
+<head>
+    <style>
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+        }
+
+        #area {
+            height: 100vh;
+            width: 100vw;
+        }
+
+        #stats_div {
+            position: absolute;
+            top: 0;
+            right: 0;
+            color: white;
+            font-size: 2em;
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="area"></canvas>
+
+    <div id="stats_div"></div>
+
+    <script>
+        var WIDTH = area.getBoundingClientRect().width;
+        var HEIGHT = area.getBoundingClientRect().height;
+    </script>
+    
+    <script src="./scene/js/app.js"></script>
+    <script src="three.js"></script>
+    <script src="DeviceOrientationControls.js"></script>
+    <script src="GLTFLoader.js"></script>
+    <!-- <script src="three_logic.js"></script> -->
+    <script>
+        window.THREE = THREE; // Used by APP Scripts.        
+
+        window.boats = []
+
+        var loader = new THREE.FileLoader();
+        loader.load('app.json', function (text) {
+
+            var player = new APP.Player(area);
+            player.load(JSON.parse(text));
+            player.setSize(window.innerWidth, window.innerHeight);            
+
+            window.controls = new THREE.DeviceOrientationControls(camera, true);
+            controls.connect();
+
+            var variable = true
+
+            socket.addEventListener('message', function (msg) {
+                var message = JSON.parse(msg.data)
+                
+                if(message.type == "comp"){
+                    var competitor = window.boats[0].clone()
+
+                    competitor.userData.id =  message.competitorID
+
+                    alert("competitor loaded")
+
+                    scene.add(competitor)
+                    window.boats.push(competitor)
+                }else{
+                    if(message.type == "id"){
+                        window.id = message.id
+
+                        alert(id)
+
+                        window.boats[0].userData.id = message.id
+                    }else{
+                        stats_div = !variable
+                        for(var i = 0; i < message.list.length; i++){
+                            var pos = message.list[i].position
+                            var quat = message.list[i].quaternion
+        
+                            for(var boat of window.boats){
+
+                                if(boat.userData.id == message.list[i].id){
+                                    boat.position.set(pos.x, pos.y, pos.z)
+                                    boat.quaternion.set(quat.x, quat.y, quat.z, quat.w)
+                                }
+                            
+                            }
+                        }
+                    }
+                }
+                
+            });
+
+            scene.background = new THREE.CubeTextureLoader()
+                .setPath('/textures/cube/skyboxsun25deg/')
+                .load(
+
+                    // urls of images used in the cube texture
+                    [
+                        'px.jpg',
+                        'nx.jpg',
+                        'py.jpg',
+                        'ny.jpg',
+                        'pz.jpg',
+                        'nz.jpg'
+                    ],
+
+                    // what to do when loading is over
+                    function (cubeTexture) {
+
+                        // CUBE TEXTURE is also an option for a background
+                        scene.background = cubeTexture;
+
+                        renderer.render(scene, camera);
+
+                    }
+
+                );
+
+                window.boats.push(scene.getObjectByName("boat"))
+
+                draw()
+        });
+    </script>
+    <script>
+        window.addEventListener('dblclick', function(){
+            document.body.requestFullscreen()
+        })
+
+        const socket = new WebSocket('ws://192.168.43.191:3000/');
+
+        // Connection opened
+        socket.addEventListener('open', function (event) {
+            // socket.send('Hello Server!');
+        });
+
+        var alpha = 0
+
+        window.addEventListener('deviceorientation', function (event) {
+            alpha = event.alpha
+
+            // stats_div.innerHTML = alpha + "<br>" + Math.sin(alpha*Math.PI/180) +"<br>"+ Math.cos(alpha*Math.PI/180)
+        })        
+
+        window.addEventListener('devicemotion', function (e) {
+            
+            if ((e.rotationRate.alpha > 100 || e.rotationRate.alpha < -100) && (e.rotationRate.gamma > 100 || e.rotationRate.gamma < -100)) {
+                var to_send = {
+                    push_forward: true,
+                    alpha: alpha,
+                    id: id
+                }
+                
+                stats_div.innerHTML = "TRIGGERED"
+                
+                if(!window.id) {
+                    stats_div.innerHTML = "FALSE TRIGGER"
+                    
+                    return
+                }
+
+                stats_div.innerHTML = ""
+                socket.send(JSON.stringify(to_send))
+            }else{
+                stats_div.innerHTML = "NOT TRIGGERED"
+            }
+        })
+        
+
+        function draw() {
+            requestAnimationFrame(draw)
+
+            camera.position.set(
+                    boats[0].position.x,
+                    boats[0].position.y + 2,
+                    boats[0].position.z
+                )
+
+            controls.update();
+            renderer.render(scene, camera)
+        }
+    </script>
+</body>
+
+</html>
